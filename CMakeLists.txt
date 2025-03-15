@@ -4,10 +4,10 @@ project(epsiworld LANGUAGES ASM CXX)
 # Define source directories and files
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
-set(BOOTLOADER_SOURCE ${SRC_DIR}/bootloader.asm)
-set(KERNEL_ENTRY_SOURCE ${SRC_DIR}/kernel_entry.asm)
-set(KERNEL_CPP_SOURCE ${SRC_DIR}/kernel.cpp)
-set(MEMORY_CPP_SOURCE ${SRC_DIR}/memory.cpp)
+set(BOOTLOADER_SOURCE ${SRC_DIR}/boot/bootloader.asm)
+set(KERNEL_ENTRY_SOURCE ${SRC_DIR}/boot/kernel_entry.asm)
+set(KERNEL_CPP_SOURCE ${SRC_DIR}/kernel/kernel.cpp)
+set(MEMORY_CPP_SOURCE ${SRC_DIR}/libc/memory.cpp)
 
 # Define output files
 set(BOOTLOADER_BINARY ${CMAKE_BINARY_DIR}/bootloader.bin)
