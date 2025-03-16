@@ -1,5 +1,8 @@
-void kernel_init() {
+#include "terminal.h"
+#include "keyboard.h"
 
+void kernel_init() {
+    terminal_init();
 }
 
 void kernel_main() {
@@ -7,5 +10,7 @@ void kernel_main() {
 
     while (true) {
         __asm__ volatile("hlt");
+
+
     }
 }

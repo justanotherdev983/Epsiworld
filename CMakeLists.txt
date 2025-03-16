@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(epsiworld LANGUAGES ASM CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Define source directories and files
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
@@ -8,6 +10,9 @@ set(BOOTLOADER_SOURCE ${SRC_DIR}/boot/bootloader.asm)
 set(KERNEL_ENTRY_SOURCE ${SRC_DIR}/boot/kernel_entry.asm)
 set(KERNEL_CPP_SOURCE ${SRC_DIR}/kernel/kernel.cpp)
 set(MEMORY_CPP_SOURCE ${SRC_DIR}/libc/memory.cpp)
+set(KEYBOARD_CPP_SOURCE ${SRC_DIR}/drivers/keyboard.cpp)
+set(TERMINAL_CPP_SOURCE ${SRC_DIR}/drivers/terminal.cpp)
+
 
 # Define output files
 set(BOOTLOADER_BINARY ${CMAKE_BINARY_DIR}/bootloader.bin)
@@ -72,7 +77,7 @@ add_custom_command(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -ffreestanding -fno-exceptions -fno-rtti -nostdlib -nostdinc++ -Wall -Wextra")
 
 # Add library target for kernel files
-add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE})
+add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE}  ${TERMINAL_CPP_SOURCE}) 
 target_include_directories(kernel_obj PRIVATE ${INCLUDE_DIR})
 
 # Link the kernel using explicit paths to object files
@@ -80,8 +85,9 @@ add_custom_command(
     OUTPUT ${KERNEL_LINKED}
     COMMAND ld -m elf_i386 -T ${CMAKE_BINARY_DIR}/linker.ld -o ${KERNEL_LINKED}
             ${KERNEL_ENTRY_BINARY} 
-            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/kernel.cpp.o
-            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/memory.cpp.o
+            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/kernel/kernel.cpp.o
+            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/libc/memory.cpp.o
+            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/terminal.cpp.o
     DEPENDS ${KERNEL_ENTRY_BINARY} kernel_obj ${CMAKE_BINARY_DIR}/linker.ld
     COMMENT "Linking the kernel"
     VERBATIM
