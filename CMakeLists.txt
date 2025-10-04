@@ -80,7 +80,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -ffreestanding -fno-exceptions -fno
 add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE})
 target_include_directories(kernel_obj PRIVATE ${INCLUDE_DIR})
 
-# Link the kernel using explicit paths to object files
+# Create a custom target that depends on kernel_obj and links everything
 add_custom_command(
     OUTPUT ${KERNEL_LINKED}
     COMMAND ld -m elf_i386 -T ${CMAKE_BINARY_DIR}/linker.ld -o ${KERNEL_LINKED}
@@ -91,6 +91,8 @@ add_custom_command(
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/terminal.cpp.o
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/keyboard.cpp.o
     DEPENDS ${KERNEL_ENTRY_BINARY} ${IO_BINARY} kernel_obj ${CMAKE_BINARY_DIR}/linker.ld
+            ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE}
+    BYPRODUCTS ${KERNEL_LINKED}
     COMMENT "Linking the kernel"
     VERBATIM
 )
