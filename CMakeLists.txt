@@ -12,12 +12,12 @@ set(KERNEL_CPP_SOURCE ${SRC_DIR}/kernel/kernel.cpp)
 set(MEMORY_CPP_SOURCE ${SRC_DIR}/libc/memory.cpp)
 set(KEYBOARD_CPP_SOURCE ${SRC_DIR}/drivers/keyboard.cpp)
 set(TERMINAL_CPP_SOURCE ${SRC_DIR}/drivers/terminal.cpp)
-
+set(IO_ASM_SOURCE ${SRC_DIR}/util/io.asm)
 
 # Define output files
 set(BOOTLOADER_BINARY ${CMAKE_BINARY_DIR}/bootloader.bin)
-set(KERNEL_ENTRY_RAW ${CMAKE_BINARY_DIR}/kernel_entry.bin)
 set(KERNEL_ENTRY_BINARY ${CMAKE_BINARY_DIR}/kernel_entry.o)
+set(IO_BINARY ${CMAKE_BINARY_DIR}/io.o)
 set(KERNEL_LINKED ${CMAKE_BINARY_DIR}/kernel_linked.bin)
 set(DISK_IMAGE ${CMAKE_BINARY_DIR}/disk.img)
 
@@ -46,21 +46,21 @@ SECTIONS {
 }
 ")
 
-# First, assemble the kernel entry using FASM to produce a raw binary
+# Assemble kernel_entry.asm to ELF object file
 add_custom_command(
-    OUTPUT ${KERNEL_ENTRY_RAW}
-    COMMAND fasm ${KERNEL_ENTRY_SOURCE} ${KERNEL_ENTRY_RAW}
+    OUTPUT ${KERNEL_ENTRY_BINARY}
+    COMMAND fasm ${KERNEL_ENTRY_SOURCE} ${KERNEL_ENTRY_BINARY}
     DEPENDS ${KERNEL_ENTRY_SOURCE}
-    COMMENT "Assembling the kernel entry with FASM"
+    COMMENT "Assembling kernel_entry.asm with FASM"
     VERBATIM
 )
 
-# Then convert the raw binary to an ELF object file
+# Assemble io.asm to ELF object file
 add_custom_command(
-    OUTPUT ${KERNEL_ENTRY_BINARY}
-    COMMAND objcopy -I binary -O elf32-i386 -B i386 --rename-section .data=.text,code,readonly ${KERNEL_ENTRY_RAW} ${KERNEL_ENTRY_BINARY} --redefine-sym _binary_${CMAKE_BINARY_DIR}_kernel_entry_bin_start=kernel_entry
-    DEPENDS ${KERNEL_ENTRY_RAW}
-    COMMENT "Converting FASM binary to ELF object file"
+    OUTPUT ${IO_BINARY}
+    COMMAND fasm ${IO_ASM_SOURCE} ${IO_BINARY}
+    DEPENDS ${IO_ASM_SOURCE}
+    COMMENT "Assembling io.asm with FASM"
     VERBATIM
 )
 
@@ -77,18 +77,20 @@ add_custom_command(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -ffreestanding -fno-exceptions -fno-rtti -nostdlib -nostdinc++ -Wall -Wextra")
 
 # Add library target for kernel files
-add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE}  ${TERMINAL_CPP_SOURCE}) 
+add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE})
 target_include_directories(kernel_obj PRIVATE ${INCLUDE_DIR})
 
 # Link the kernel using explicit paths to object files
 add_custom_command(
     OUTPUT ${KERNEL_LINKED}
     COMMAND ld -m elf_i386 -T ${CMAKE_BINARY_DIR}/linker.ld -o ${KERNEL_LINKED}
-            ${KERNEL_ENTRY_BINARY} 
+            ${KERNEL_ENTRY_BINARY}
+            ${IO_BINARY}
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/kernel/kernel.cpp.o
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/libc/memory.cpp.o
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/terminal.cpp.o
-    DEPENDS ${KERNEL_ENTRY_BINARY} kernel_obj ${CMAKE_BINARY_DIR}/linker.ld
+            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/keyboard.cpp.o
+    DEPENDS ${KERNEL_ENTRY_BINARY} ${IO_BINARY} kernel_obj ${CMAKE_BINARY_DIR}/linker.ld
     COMMENT "Linking the kernel"
     VERBATIM
 )

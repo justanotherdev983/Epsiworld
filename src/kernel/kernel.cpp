@@ -5,12 +5,15 @@ void kernel_init() {
     terminal_init();
 }
 
-void kernel_main() {
+extern "C" void kernel_main() {
     kernel_init();
+    terminal_writestring("EpsiWorld OS Initialized\n");
+    terminal_writestring("Keyboard ready...\n");
 
     while (true) {
-        __asm__ volatile("hlt");
-
+        process_keyboard();
+        
+        //__asm__ volatile("hlt");
 
     }
 }

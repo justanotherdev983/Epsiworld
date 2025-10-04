@@ -38,16 +38,21 @@ void terminal_init() {
 
 void terminal_scroll() {
     if (term_row >= VGA_HEIGHT) {
-        for (size_t y = 0; y < VGA_HEIGHT - 1; y++) {
+        for (size_t y = 1; y < VGA_HEIGHT; y++) {
             for (size_t x = 0; x < VGA_WIDTH; x++) {
+                const size_t dst_index = (y - 1) * VGA_WIDTH + x;
                 const size_t src_index = y * VGA_WIDTH + x;
-                const size_t dst_index = (y + 1) * VGA_WIDTH + x;
                 term_buffer[dst_index] = term_buffer[src_index];
             }
         }
+        
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            const size_t index = (VGA_HEIGHT - 1) * VGA_WIDTH + x;
+            term_buffer[index] = vga_entry(' ', term_color);
+        }
+        
+        term_row = VGA_HEIGHT - 1;
     }
-
-    term_row = VGA_HEIGHT - 1;
 }
 
 void terminal_putchar(char c) {
@@ -77,11 +82,27 @@ void terminal_write(const char* data, size_t size) {
 
 }
 void terminal_writestring(const char* data) {
+    size_t len = 0;
 
+    while (data[len] != '\0') {
+        len++;
+    }
+
+    terminal_write(data, len);
 }
+
 void terminal_setcolor(uint8_t color) {
-
+    term_color = color;
 }
-void terminal_clear() {
 
+void terminal_clear() {
+    for (size_t i = 0; i < VGA_HEIGHT; ++i) {
+        for (size_t j = 0; j < VGA_WIDTH; ++j) {
+            const size_t index = i * VGA_HEIGHT + j;
+            term_buffer[index] = ' ';
+        }
+    }
+
+    term_row = 0;
+    term_column = 0;
 }
