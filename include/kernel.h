@@ -8,5 +8,5 @@ enum class output_type_t {
     UNKNOWN,
 };
 
-void kernel_init(output_type_t out_type);
-extern "C" void kernel_main();
+void kernel_init(void* vbe_mode_info_ptr, output_type_t out_type);
+extern "C" void kernel_main(void* vbe_mode_info_ptr, uint32_t output_type_value);

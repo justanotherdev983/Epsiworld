@@ -12,12 +12,14 @@ set(KERNEL_CPP_SOURCE ${SRC_DIR}/kernel/kernel.cpp)
 set(MEMORY_CPP_SOURCE ${SRC_DIR}/libc/memory.cpp)
 set(KEYBOARD_CPP_SOURCE ${SRC_DIR}/drivers/keyboard.cpp)
 set(TERMINAL_CPP_SOURCE ${SRC_DIR}/drivers/terminal.cpp)
+set(FRAMEBUFFER_CPP_SOURCE ${SRC_DIR}/drivers/framebuffer.cpp)
 set(IO_ASM_SOURCE ${SRC_DIR}/util/io.asm)
 
 # Define output files
 set(BOOTLOADER_BINARY ${CMAKE_BINARY_DIR}/bootloader.bin)
 set(KERNEL_ENTRY_BINARY ${CMAKE_BINARY_DIR}/kernel_entry.o)
 set(IO_BINARY ${CMAKE_BINARY_DIR}/io.o)
+set(KERNEL_ELF ${CMAKE_BINARY_DIR}/kernel.elf)
 set(KERNEL_LINKED ${CMAKE_BINARY_DIR}/kernel_linked.bin)
 set(DISK_IMAGE ${CMAKE_BINARY_DIR}/disk.img)
 
@@ -77,32 +79,45 @@ add_custom_command(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -ffreestanding -fno-exceptions -fno-rtti -nostdlib -nostdinc++ -Wall -Wextra")
 
 # Add library target for kernel files
-add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE})
+add_library(kernel_obj OBJECT ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE} ${FRAMEBUFFER_CPP_SOURCE})
 target_include_directories(kernel_obj PRIVATE ${INCLUDE_DIR})
 
-# Create a custom target that depends on kernel_obj and links everything
+# Define intermediate ELF file and final binary
+set(KERNEL_ELF ${CMAKE_BINARY_DIR}/kernel.elf)
+
+# Link kernel objects into ELF file
 add_custom_command(
-    OUTPUT ${KERNEL_LINKED}
-    COMMAND ld -m elf_i386 -T ${CMAKE_BINARY_DIR}/linker.ld -o ${KERNEL_LINKED}
+    OUTPUT ${KERNEL_ELF}
+    COMMAND ld -m elf_i386 -T ${CMAKE_BINARY_DIR}/linker.ld -o ${KERNEL_ELF}
             ${KERNEL_ENTRY_BINARY}
             ${IO_BINARY}
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/kernel/kernel.cpp.o
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/libc/memory.cpp.o
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/terminal.cpp.o
             ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/keyboard.cpp.o
+            ${CMAKE_BINARY_DIR}/CMakeFiles/kernel_obj.dir/src/drivers/framebuffer.cpp.o
     DEPENDS ${KERNEL_ENTRY_BINARY} ${IO_BINARY} kernel_obj ${CMAKE_BINARY_DIR}/linker.ld
-            ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE}
-    BYPRODUCTS ${KERNEL_LINKED}
-    COMMENT "Linking the kernel"
+            ${KERNEL_CPP_SOURCE} ${MEMORY_CPP_SOURCE} ${KEYBOARD_CPP_SOURCE} ${TERMINAL_CPP_SOURCE} ${FRAMEBUFFER_CPP_SOURCE}
+    COMMENT "Linking the kernel ELF"
+    VERBATIM
+)
+
+# Extract raw binary from ELF
+add_custom_command(
+    OUTPUT ${KERNEL_LINKED}
+    COMMAND objcopy -O binary ${KERNEL_ELF} ${KERNEL_LINKED}
+    DEPENDS ${KERNEL_ELF}
+    COMMENT "Extracting raw kernel binary from ELF"
     VERBATIM
 )
 
 # Create a disk image with bootloader and kernel
+# FIXED: Changed seek=1 to seek=2 so kernel starts at sector 2 (byte 1024)
 add_custom_command(
     OUTPUT ${DISK_IMAGE}
     COMMAND dd if=/dev/zero of=${DISK_IMAGE} bs=512 count=2880
     COMMAND dd if=${BOOTLOADER_BINARY} of=${DISK_IMAGE} conv=notrunc
-    COMMAND dd if=${KERNEL_LINKED} of=${DISK_IMAGE} bs=512 seek=1 conv=notrunc
+    COMMAND dd if=${KERNEL_LINKED} of=${DISK_IMAGE} bs=512 seek=2 conv=notrunc
     DEPENDS ${BOOTLOADER_BINARY} ${KERNEL_LINKED}
     COMMENT "Creating disk image"
     VERBATIM
@@ -114,9 +129,9 @@ add_custom_target(epsiworld ALL
     COMMENT "Building epsiworld OS"
 )
 
-# QEMU run target
+# QEMU run target - use floppy format
 add_custom_target(run
-    COMMAND qemu-system-i386 -drive format=raw,file=${DISK_IMAGE}
+    COMMAND qemu-system-i386 -fda ${DISK_IMAGE}
     DEPENDS ${DISK_IMAGE}
     COMMENT "Running epsiworld OS in QEMU"
     VERBATIM

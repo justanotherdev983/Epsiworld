@@ -1,6 +1,10 @@
 use16
 org 0x7c00
 
+; VBE data will be stored at these memory locations
+VBE_INFO_BLOCK equ 0x7E00
+VBE_MODE_INFO equ 0x8000
+
 init:
     cli
     xor ax, ax
@@ -13,19 +17,80 @@ init:
     mov si, welcome_msg
     call print_str 
 
+setup_vbe:
+    mov si, vbe_msg
+    call print_str
+    
+    ; Get VBE controller info
+    mov ax, 0x4F00
+    mov di, VBE_INFO_BLOCK
+    int 0x10
+    cmp ax, 0x004F
+    jne vbe_failed
+    
+    ; Get mode info for 1024x768x24
+    mov ax, 0x4F01
+    mov cx, 0x118
+    mov di, VBE_MODE_INFO
+    int 0x10
+    cmp ax, 0x004F
+    jne try_lower_res
+    
+    ; Set VBE mode with linear framebuffer
+    mov bx, 0x4118      ; 0x118 | 0x4000
+    jmp set_vbe
+
+try_lower_res:
+    mov si, fallback_msg
+    call print_str
+    
+    mov ax, 0x4F01
+    mov cx, 0x115
+    mov di, VBE_MODE_INFO
+    int 0x10
+    cmp ax, 0x004F
+    jne vbe_failed
+    
+    mov bx, 0x4115      ; 0x115 | 0x4000
+
+set_vbe:
+    mov ax, 0x4F02
+    int 0x10
+    cmp ax, 0x004F
+    jne vbe_failed
+
+vbe_success:
+    mov si, success_vbe_msg
+    call print_str
+    mov byte [0x7000], 1
+    jmp load_kernel
+
+vbe_failed:
+    mov si, error_vbe_msg
+    call print_str
+    mov byte [0x7000], 0
+    mov ax, 0x0003
+    int 0x10
+
 load_kernel:
     mov si, loading_msg
     call print_str
     
-    ; Load kernel to 0x10000 (64KB mark, safer location)
-    mov ah, 0x02        ; BIOS read sector function
-    mov al, 32          ; Number of sectors to read
-    mov ch, 0           ; Cylinder number
-    mov cl, 2           ; Sector number (starting from sector 2)
-    mov dh, 0           ; Head number
-    mov dl, 0x80        ; Drive number (0x80 = first hard disk)
+    ; Reset disk system first - try floppy (0x00)
+    xor ax, ax
+    xor dl, dl          ; Drive 0 (floppy)
+    int 0x13
+    jc disk_error
     
-    ; Load to 0x10000 (segment 0x1000, offset 0)
+    mov si, reset_ok_msg
+    call print_str
+    
+    ; Load kernel to 0x10000 - smaller read first (15 sectors)
+    mov ax, 0x020F      ; ah=0x02, al=15 sectors
+    mov cx, 0x0002      ; ch=0 cylinder, cl=2 sector
+    xor dh, dh          ; head 0
+    xor dl, dl          ; floppy drive 0
+    
     mov bx, 0x1000
     mov es, bx
     xor bx, bx
@@ -33,24 +98,27 @@ load_kernel:
     int 0x13
     jc disk_error
     
-    cmp al, 32
-    jne disk_error
+    ; Print actual sectors read
+    push ax
+    mov si, read_ok_msg
+    call print_str
+    pop ax
     
-    mov si, success_msg
+    ; Check if we read expected sectors
+    cmp al, 15
+    jl sector_error
+    
+    mov si, ok_msg
     call print_str
 
 enter_protected_mode:
-    cli                 ; Disable interrupts
-    
-    ; Load GDT
+    cli
     lgdt [gdt_descriptor]
     
-    ; Enable protected mode
     mov eax, cr0
-    or eax, 1           ; Set PE (Protection Enable) bit
+    or eax, 1
     mov cr0, eax
     
-    ; Far jump to flush pipeline and enter 32-bit mode
     jmp 0x08:protected_mode_entry
 
 print_str:
@@ -58,7 +126,7 @@ print_str:
     mov ah, 0x0e
 .loop:
     lodsb
-    or al, al
+    test al, al
     jz .done
     int 0x10
     jmp .loop
@@ -71,58 +139,54 @@ disk_error:
     call print_str
     jmp $
 
-; GDT - Global Descriptor Table
+sector_error:
+    mov si, sector_err_msg
+    call print_str
+    jmp $
+
+; GDT
 gdt_start:
-    ; Null descriptor (required)
-    dq 0x0
+    dq 0
 
 gdt_code:
-    ; Code segment descriptor
-    dw 0xFFFF       ; Limit (bits 0-15)
-    dw 0x0000       ; Base (bits 0-15)
-    db 0x00         ; Base (bits 16-23)
-    db 10011010b    ; Access byte: present, ring 0, code, executable, readable
-    db 11001111b    ; Flags + Limit (bits 16-19): 4K granularity, 32-bit
-    db 0x00         ; Base (bits 24-31)
+    dw 0xFFFF, 0
+    db 0, 10011010b, 11001111b, 0
 
 gdt_data:
-    ; Data segment descriptor
-    dw 0xFFFF       ; Limit (bits 0-15)
-    dw 0x0000       ; Base (bits 0-15)
-    db 0x00         ; Base (bits 16-23)
-    db 10010010b    ; Access byte: present, ring 0, data, writable
-    db 11001111b    ; Flags + Limit (bits 16-19): 4K granularity, 32-bit
-    db 0x00         ; Base (bits 24-31)
+    dw 0xFFFF, 0
+    db 0, 10010010b, 11001111b, 0
 
 gdt_end:
 
 gdt_descriptor:
-    dw gdt_end - gdt_start - 1  ; Size of GDT
-    dd gdt_start                ; Address of GDT
+    dw gdt_end - gdt_start - 1
+    dd gdt_start
 
-; 32-bit protected mode code
+; 32-bit protected mode
 use32
 protected_mode_entry:
-    ; Set up segment registers
-    mov ax, 0x10        ; Data segment selector (offset into GDT)
+    mov ax, 0x10
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    
-    ; Set up stack
     mov esp, 0x90000
-    
-    ; Jump to kernel (now at 0x10000)
     jmp 0x10000
 
 ; Data
 use16
-welcome_msg db 'EpsiWorld OS Bootloader', 13, 10, 0
-loading_msg db 'Loading kernel...', 13, 10, 0
-success_msg db 'Kernel loaded, entering protected mode...', 13, 10, 0
-error_msg db 'Error loading kernel!', 13, 10, 0
+welcome_msg db 'EpsiWorld Bootloader', 13, 10, 0
+vbe_msg db 'VBE init...', 13, 10, 0
+fallback_msg db 'Trying 800x600...', 13, 10, 0
+success_vbe_msg db 'VBE OK!', 13, 10, 0
+error_vbe_msg db 'VBE failed, TTY', 13, 10, 0
+loading_msg db 'Loading...', 13, 10, 0
+reset_ok_msg db 'Reset OK', 13, 10, 0
+read_ok_msg db 'Read OK', 13, 10, 0
+ok_msg db 'Entering PM...', 13, 10, 0
+error_msg db 'Disk error!', 13, 10, 0
+sector_err_msg db 'Sector count!', 13, 10, 0
 
 times 510 - ($ - $$) db 0
 dw 0xAA55

@@ -21,43 +21,24 @@ kernel_entry:
     mov esp, 0x90000    ; Set stack pointer
     mov ebp, esp
     
-    ; Clear screen
-    mov ecx, 80*25      ; Screen size
-    mov edi, 0xB8000    ; Video memory address
-    mov eax, 0x07200720 ; Space with light gray on black (two spaces)
-    rep stosd           ; Repeat store string dword
+    ; Read output type flag from 0x7000 (set by bootloader)
+    xor eax, eax
+    mov al, [0x7000]    ; 0 = TTY, 1 = VBE
+    push eax            ; Push output type as second parameter
     
-    ; Display a message
-    mov edi, 0xB8000    ; Video memory
-    mov esi, kernel_msg
-    call print_string
-
+    ; Pass VBE info address to kernel_main
+    ; The bootloader stored VBE mode info at 0x8000
+    push 0x8000         ; Push VBE mode info address as first parameter
+    
     ; Call the C++ kernel main function
+    ; Parameters: kernel_main(void* vbe_mode_info_ptr, uint32_t output_type)
     call kernel_main
+    
+    ; Clean up stack
+    add esp, 8
 
     ; Halt the system
     cli
+.hang:
     hlt
-    jmp $               ; Infinite loop
-    
-; Print null-terminated string in protected mode
-print_string:
-    push eax
-    push edi
-    
-.loop:
-    lodsb               ; Load byte at ESI into AL and increment ESI
-    or al, al           ; Check if AL is zero (null terminator)
-    jz .done
-    
-    mov ah, 0x07        ; Light gray on black attribute
-    mov [edi], ax       ; Store character and attribute
-    add edi, 2          ; Move to next character position
-    jmp .loop
-    
-.done:
-    pop edi
-    pop eax
-    ret
-
-kernel_msg db 'EpsiWorld OS Kernel loaded successfully!', 0
+    jmp .hang

@@ -91,6 +91,36 @@ void terminal_writestring(const char* data) {
     terminal_write(data, len);
 }
 
+void terminal_writeint(int num) {
+    if (num == 0) {
+        terminal_putchar('0');
+        return;
+    }
+
+    char buffer[20]; // A buffer large enough for a 64-bit integer string representation
+    int i = 0;
+    int is_negative = 0;
+
+    if (num < 0) {
+        is_negative = 1;
+        num = -num;
+    }
+
+    while (num != 0) {
+        buffer[i++] = (num % 10) + '0';
+        num /= 10;
+    }
+
+    if (is_negative) {
+        terminal_putchar('-');
+    }
+
+    // Print digits in reverse order
+    while (i > 0) {
+        terminal_putchar(buffer[--i]);
+    }
+}
+
 void terminal_setcolor(uint8_t color) {
     term_color = color;
 }
